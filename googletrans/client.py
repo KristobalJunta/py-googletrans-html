@@ -30,8 +30,8 @@ class Translator(object):
     :param user_agent: the User-Agent header to send when making requests.
     :type user_agent: :class:`str`
 
-    :param proxies: proxies configuration. 
-                    Dictionary mapping protocol or protocol and host to the URL of the proxy 
+    :param proxies: proxies configuration.
+                    Dictionary mapping protocol or protocol and host to the URL of the proxy
                     For example ``{'http': 'foo.bar:3128', 'http://host.name': 'foo.bar:4012'}``
     :type proxies: dictionary
 
@@ -53,13 +53,13 @@ class Translator(object):
             self.session.mount('https://', TimeoutAdapter(timeout))
             self.session.mount('http://', TimeoutAdapter(timeout))
 
-        self.service_urls = service_urls or ['translate.google.com']
-        self.token_acquirer = TokenAcquirer(session=self.session, host=self.service_urls[0])
+        self.service_urls = service_urls or [urls.BASE]
+        self.token_acquirer = TokenAcquirer(session=self.session)
 
         # Use HTTP2 Adapter if hyper is installed
         try:  # pragma: nocover
             from hyper.contrib import HTTP20Adapter
-            self.session.mount(urls.BASE, HTTP20Adapter())
+            self.session.mount("https://{}".format(urls.BASE), HTTP20Adapter())
         except ImportError:  # pragma: nocover
             pass
 
@@ -68,18 +68,22 @@ class Translator(object):
             return self.service_urls[0]
         return random.choice(self.service_urls)
 
-    def _translate(self, text, dest, src, override):
+    def _translate(self, text, dest, src, fmt='text', **kwargs):
         if not PY3 and isinstance(text, str):  # pragma: nocover
             text = text.decode('utf-8')
 
         token = self.token_acquirer.do(text)
-        params = utils.build_params(query=text, src=src, dest=dest,
-                                    token=token, override=override)
+        params = utils.build_params(src=src, dest=dest, token=token,
+                                    fmt=fmt, **kwargs)
 
         url = urls.TRANSLATE.format(host=self._pick_service_url())
-        r = self.session.get(url, params=params)
+        payload = {"q": text}
+
+        r = self.session.post(url, params=params, data=payload)
 
         data = utils.format_json(r.text)
+        if isinstance(data, str):
+            data = [data, src]
         return data
 
     def _parse_extra_data(self, data):
@@ -104,7 +108,7 @@ class Translator(object):
 
         return extra
 
-    def translate(self, text, dest='en', src='auto', **kwargs):
+    def translate(self, text, dest='en', src='auto', fmt='text', **kwargs):
         """Translate text from source language to destination language
 
         :param text: The source text(s) to be translated. Batch translation is supported via sequence input.
@@ -120,6 +124,10 @@ class Translator(object):
                     or one of the language names listed in :const:`googletrans.LANGCODES`.
                     If a language is not specified,
                     the system will attempt to identify the source language automatically.
+        :param src: :class:`str`; :class:`unicode`
+
+        :param fmt: Format of the input text.
+                    The value should be one of: html, text
         :param src: :class:`str`; :class:`unicode`
 
         :rtype: Translated
@@ -162,26 +170,29 @@ class Translator(object):
             else:
                 raise ValueError('invalid destination language')
 
+        if fmt not in ('html', 'text'):
+            raise ValueError('invalid input text format')
+
         if isinstance(text, list):
             result = []
             for item in text:
-                translated = self.translate(item, dest=dest, src=src, **kwargs)
+                translated = self.translate(item, dest=dest, src=src, fmt=fmt, **kwargs)
                 result.append(translated)
             return result
 
         origin = text
-        data = self._translate(text, dest, src, kwargs)
+        data = self._translate(text, dest, src, fmt=fmt, **kwargs)
 
         # this code will be updated when the format is changed.
-        translated = ''.join([d[0] if d[0] else '' for d in data[0]])
+        translated = data[0]
 
         extra_data = self._parse_extra_data(data)
 
         # actual source language that will be recognized by Google Translator when the
         # src passed is equal to auto.
         try:
-            src = data[2]
-        except Exception:  # pragma: nocover
+            src = data[1]
+        except IndexError:  # pragma: nocover
             pass
 
         pron = origin
@@ -247,15 +258,15 @@ class Translator(object):
                 result.append(lang)
             return result
 
-        data = self._translate(text, 'en', 'auto', kwargs)
+        data = self._translate(text, 'en', 'auto', **kwargs)
 
         # actual source language that will be recognized by Google Translator when the
         # src passed is equal to auto.
         src = ''
         confidence = 0.0
         try:
-            src = ''.join(data[8][0])
-            confidence = data[8][-2][0]
+            src = data[1]
+            # confidence = data[8][-2][0]
         except Exception:  # pragma: nocover
             pass
         result = Detected(lang=src, confidence=confidence)

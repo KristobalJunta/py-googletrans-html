@@ -3,35 +3,27 @@ from __future__ import print_function
 import re
 import json
 
+from googletrans.constants import DEFAULT_API_KEY
 
-def build_params(query, src, dest, token, override):
-    params = {
-        'client': 'webapp',
+
+def build_params(src, dest, token, fmt, **kwargs) -> dict:
+    return {
+        'client': 'te_lib',
         'sl': src,
         'tl': dest,
-        'hl': dest,
-        'dt': ['at', 'bd', 'ex', 'ld', 'md', 'qca', 'rw', 'rm', 'ss', 't'],
-        'ie': 'UTF-8',
-        'oe': 'UTF-8',
-        'otf': 1,
-        'ssel': 0,
-        'tsel': 0,
         'tk': token,
-        'q': query,
+        'format': fmt,
+        'v': '1.0',
+        'key': DEFAULT_API_KEY,
+        **kwargs,
     }
-
-    if override is not None:
-        for key, value in get_items(override):
-            params[key] = value
-
-    return params
 
 
 def legacy_format_json(original):
     # save state
     states = []
     text = original
-    
+
     # save position for double-quoted texts
     for i, pos in enumerate(re.finditer('"', text)):
         # pos.start() is a double-quote

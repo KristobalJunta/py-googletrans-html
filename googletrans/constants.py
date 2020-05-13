@@ -1,5 +1,9 @@
 DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
 
+# This API key is used by in-browser translate function
+# and is shared for all clients
+DEFAULT_API_KEY = 'AIzaSyBOti4mM-6x9WDnZIjIeyEU21OpBXqWBgw'
+
 SPECIAL_CASES = {
     'ee': 'et',
 }
